@@ -1,0 +1,297 @@
+---
+title: "Reproducible Research - Week 2, Project"
+author: "Sam Rickman"
+date: "27 November 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(fig.width=6, fig.height=4) 
+knitr::opts_chunk$set(cache = TRUE)
+```
+
+# Assignment instructions
+
+This assignment makes use of data from a personal activity monitoring device. This device collects data at 5 minute intervals through out the day. The data consists of two months of data from an anonymous individual collected during the months of October and November, 2012 and include the number of steps taken in 5 minute intervals each day.
+
+**[Data source](https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2Factivity.zip)**
+
+# Assignment questions and responses
+
+## 1. Code for reading in the dataset and/or processing the data
+
+```{r readData}
+# Read in URL address and set destination file name data
+
+fileUrl <- "https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2Factivity.zip"
+destFileName <- "repdata.zip"
+
+# Download the data if not already downloaded
+if(!file.exists(destFileName)){
+        download.file(fileUrl, destfile = destFileName, mode = "wb")
+}
+
+# Unzip the downloaded file if not already done
+if(!dir.exists("repdata")){
+        unzip(destFileName, exdir="./repdata")
+}
+
+# Read in the data - I am reading in the date and time as character 
+# For ease of later conversion
+repData <- read.csv("./repdata/activity.csv", colClasses = c("numeric", "character", "character"))
+```
+
+# 2. Histogram of the total number of steps taken each day
+
+```{R plotData, warning=FALSE, message=FALSE}
+
+library(ggplot2)
+library(lubridate)
+# Calculate the daily total number of steps taken
+dailyTotals <- tapply(repData$steps, repData$date, sum, na.rm = TRUE)
+
+# Make it a data frame
+dailyTotals <- as.data.frame(dailyTotals)
+
+# Take the dates out of the row names and make them a value
+dailyTotals$sumOfSteps <- dailyTotals$dailyTotals
+dailyTotals$dailyTotals <- rownames(dailyTotals)
+
+# Name the date column something sensible
+names(dailyTotals)[1] <- "Date"
+
+# Make the Date class date and the steps class numeric
+dailyTotals$Date <- ymd(dailyTotals$Date)
+dailyTotals$sumOfSteps <- as.numeric(dailyTotals$sumOfSteps)
+
+dailyHist <- ggplot(data = dailyTotals, aes(x=sumOfSteps)) + 
+                                        geom_histogram(bins = 9, 
+                                        color = "red", fill = "pink") +
+                                        xlab(element_text("Number of steps per day")) +
+                                        ylab(element_text("Frequency")) +
+                                        ggtitle(element_text("Histogram of total steps per day")) +
+                                        theme(plot.title = element_text(hjust = 0.5))
+dailyHist
+
+```
+
+# 3. Calculate and report the mean and median of the total number of steps taken per day
+
+
+```{R simpleAverages, results="asis"}
+# Mean of number of total number of steps
+totalMean <- mean(dailyTotals$sumOfSteps, na.rm = TRUE)
+
+# Median of total number number of steps each day 
+totalMedian <- median(dailyTotals$sumOfSteps, na.rm = TRUE)
+
+# Output
+paste("The mean of steps taken per day is", round(totalMean, 2), 
+        "and the median of total steps taken per day is", totalMedian, sep = " ")
+
+```
+
+# 4. What is the average daily activity pattern?
+
+## Make a time series plot (i.e. \color{red}{\verb|type = "l"|}type="l") of the 5-minute interval (x-axis) and the average number of steps taken, averaged across all days (y-axis)
+
+
+
+```{r timeAverages}
+# Calculate the average across each five-minute period:
+
+meanStepsByTime <- tapply(repData$steps, repData$interval, mean, na.rm = TRUE)
+
+# Make it a data frame
+meanStepsByTime <- as.data.frame(meanStepsByTime)
+
+
+# Make rownames a value
+meanStepsByTime$meanSteps <- meanStepsByTime$meanStepsByTime
+meanStepsByTime$meanStepsByTime <- rownames(meanStepsByTime)
+
+
+# Rename the Time column
+names(meanStepsByTime)[1] <- "Time"
+
+# Make mean steps and time numeric   
+meanStepsByTime$meanSteps <- as.numeric(meanStepsByTime$meanSteps)
+
+meanStepsByTime$Time <- as.numeric(meanStepsByTime$Time)
+
+timePlot <- ggplot(data = meanStepsByTime, mapping = aes(x = Time, y = meanSteps,
+                                                         group = 1)) +
+                                                        geom_line() +
+                                                        ylab(element_text("Mean steps"))
+
+timePlot 
+```
+
+## 5. Which 5-minute interval, on average across all the days in the dataset, contains the maximum number of steps?
+```{r 5mininterval}
+# Find out which position in the data frame has the maximum number of steps:
+rowNum <- which.max(meanStepsByTime$meanSteps)
+
+paste("The five minute period is", meanStepsByTime$Time[rowNum], "to", meanStepsByTime$Time[rowNum]+4, "which has an average of", round(meanStepsByTime$meanSteps[rowNum],2), "steps", sep=" ")
+
+
+```
+
+# 6. Code to show a strategy for imputing missing values
+
+Note that there are a number of days/intervals where there are missing values (coded as \color{red}{\verb|NA|}NA). The presence of missing days may introduce bias into some calculations or summaries of the data.
+
+Calculate and report the total number of missing values in the dataset (i.e. the total number of rows with \color{red}{\verb|NA|}NAs)
+
+```{r missingvalues, results="asis"}
+
+# The number of missing values is as below:
+sum(is.na(repData$steps))
+
+# Devise a strategy for filling in all of the missing values in the dataset. The strategy does not need to be sophisticated. For example, you could use the mean/median for that day, or the mean for that 5-minute interval, etc.
+
+# Check where the missing values are
+missingValueLocations <- is.na(repData$steps)
+
+# Subset so we just have a data frame of missing values
+missingValues <- repData[missingValueLocations,]
+
+library(xtable)
+# Look at any patterns
+missingDates <- table(missingValues$date)
+# Format missingDates for printing
+missingDates <- xtable(missingDates)
+print(missingDates, type="html")
+
+```
+We can see that there are 8 days, each with 288 missing values, i.e. all of them.
+
+It would make sense to populate each of these days with an average day. 
+
+We already have a data frame of mean steps by time, so we can use that.
+
+## Create a new dataset that is equal to the original dataset but with the missing data filled in.
+
+```{r fillvalues, message=FALSE}
+
+# Fill in the missing values in the frame of missing data with the mean steps
+missingValues$steps <- rep(meanStepsByTime$meanSteps, 8)
+
+# Then we create an imputed data set first by copying the original one without missing values
+
+imputedData <- repData[!missingValueLocations,]
+
+# Then we can add the (now updated) missing values back in with their new values
+imputedData <- rbind(imputedData, missingValues)
+
+# This will have changed the order of the data so let's put it back in date order
+library(dplyr)
+imputedData <- arrange(imputedData, date)
+
+```
+
+## 7. Make a histogram of the total number of steps taken each day
+
+```{r newhist}
+# Let's do this the same way as in the first question:
+
+# Calculate the daily total number of steps taken
+dailyTotals <- tapply(imputedData$steps, imputedData$date, sum, na.rm = TRUE)
+
+# Make it a data frame
+dailyTotals <- as.data.frame(dailyTotals)
+
+# Take the dates out of the row names and make them a value
+dailyTotals$sumOfSteps <- dailyTotals$dailyTotals
+dailyTotals$dailyTotals <- rownames(dailyTotals)
+
+# Name the date column something sensible
+names(dailyTotals)[1] <- "Date"
+
+# Make the Date class date and the steps class numeric
+dailyTotals$Date <- ymd(dailyTotals$Date)
+dailyTotals$sumOfSteps <- as.numeric(dailyTotals$sumOfSteps)
+
+dailyHist <- ggplot(data = dailyTotals, aes(x=sumOfSteps)) + 
+        geom_histogram(bins = 9, 
+                       color = "red", fill = "pink") +
+        xlab(element_text("Number of steps per day")) +
+        ylab(element_text("Frequency")) +
+        ggtitle(element_text("Histogram of total steps per day with missing values imputed")) +
+        theme(plot.title = element_text(hjust = 0.5))
+dailyHist
+
+```
+
+## Calculate and report the mean and median total number of steps taken per day. 
+
+Do these values differ from the estimates from the first part of the assignment? What is the impact of imputing missing data on the estimates of the total daily number of steps?
+
+```{r newaverages}
+
+# Again, like question 2:
+
+# Mean of number of total number of steps
+oldMean <- totalMean
+totalMean <- mean(dailyTotals$sumOfSteps, na.rm = TRUE)
+
+# Median of total number number of steps each day
+oldMedian <- totalMedian
+totalMedian <- median(dailyTotals$sumOfSteps, na.rm = TRUE)
+
+# Output
+paste("The mean of steps taken per day is", round(totalMean, 2), 
+      "and the median of total steps taken per day is", round(totalMedian, 2), sep = " ")
+
+paste("The difference in the mean is ", round(totalMean-oldMean, 2), "steps.", sep = " ")
+
+paste("The difference in the median is ", round(totalMedian-oldMedian, 2), "steps.", sep = " ")
+
+```
+
+## Are there differences in activity patterns between weekdays and weekends?
+
+### Create a new factor variable in the dataset with two levels – “weekday” and “weekend” indicating whether a given date is a weekday or weekend day.
+
+```{r weekends}
+# Make sure the date is of class Date in the new dataset 
+imputedData$date <- ymd(imputedData$date)
+
+# Create the new column saying which day of the week it is
+imputedData$weekend <- weekdays(imputedData$date)
+
+# Then change this to say either weekday or weekend 
+imputedData$weekend <- ifelse(imputedData$weekend == "Saturday" | imputedData$weekend == "Sunday", "Weekend", "Weekday")
+
+```
+
+# 8. Make a panel plot containing a time series plot of the 5-minute interval (x-axis) and the average number of steps taken, averaged across all weekday days or weekend days (y-axis).
+
+```{r panelPlot, message=FALSE, fig.height=6, fig.width=12}
+
+# Average the data by time and whether it was week or weekend
+
+library(reshape2)
+meanStepsByTimeAndWeekend <- dcast(imputedData, interval ~ weekend, mean, value.var = "steps")
+
+# Then tidy it up for plotting
+tidyData <- melt(meanStepsByTimeAndWeekend,(id.vars=c("interval")))
+
+# Sort out column names
+names(tidyData)[1] <- "Time"
+names(tidyData)[2] <- "Weekend"
+names(tidyData)[3] <- "meanSteps"
+
+# Make time numeric. Weekend and Mean.Steps are already a factor and numeric.
+tidyData$Time <- as.numeric(tidyData$Time) 
+
+timePlotByWeekend <- ggplot(data = tidyData, mapping = aes(x = Time, y = meanSteps,
+                                                         group = Weekend, color = Weekend)) +
+                geom_line() +
+                ylab(element_text("Mean steps"))
+timePlotByWeekend
+
+```
+
+Thank you for reading!
